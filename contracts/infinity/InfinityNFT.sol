@@ -48,8 +48,6 @@ using Address for address payable;
 
     mapping(bytes32 => bool) private usedTokens;
 
-    mapping(address => uint256) private whiteListMints;
-
     //metadatas
     string public baseURI = "https://server.wagmi-studio.com/metadata/test/infTest/";
 
@@ -75,9 +73,7 @@ using Address for address payable;
     function whiteListAddressMint(uint256 quantity, bytes32[] calldata _proof) external payable {
         require(contractStatus == Status.WhitelistSale, "Whitelist sale not enabled");
         require(isWhitelistedAddress(msg.sender, _proof), "Invalid merkle proof");
-        require(whiteListMints[msg.sender]+quantity<=3, "Mint limit reached");
         require(balanceOf(msg.sender)+quantity<=3, "Mint limit reached");
-        whiteListMints[msg.sender] = whiteListMints[msg.sender] + quantity;
         saleMint(msg.sender, quantity);
     }
 
