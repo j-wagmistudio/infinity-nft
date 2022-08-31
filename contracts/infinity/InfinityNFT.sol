@@ -159,7 +159,7 @@ using Address for address payable;
     }
 
     function setUsdByEuroFeed(address usdByEuroFeedAddress) external onlyOwner {
-        usdByEthFeed = AggregatorV3Interface(usdByEuroFeedAddress);
+        usdByEuroFeed = AggregatorV3Interface(usdByEuroFeedAddress);
     }
 
     //METADATA URI BUILDER
