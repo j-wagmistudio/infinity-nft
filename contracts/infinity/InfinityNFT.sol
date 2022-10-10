@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "../utils/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
@@ -10,10 +10,9 @@ import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 contract InfinityNFT is ERC721, Ownable {
 using Address for address payable;
 
-    //UTILS
-
     enum Status {
         Pause,
+        Presale,
         WhitelistSale,
         PublicSale
     }
@@ -26,114 +25,147 @@ using Address for address payable;
 
     AggregatorV3Interface private usdByEuroFeed;
 
-    address public fundsReceiver = 0x8900a924E4B942F64F23b014687cB2b2B1624FAB;
+    address public fundsReceiver = 0x7FaEc2C729bE9deED48E1805E9F87E4FAa5a311f;
 
     uint256 public priceInEuro = 1000;
 
+    uint256 public maxMintPerAddress = 10;
+
     //SUPPLIES
 
-    uint256 public saleSupply;
+    uint256 public preSaleSupply;
 
-    uint256 public SALE_MAX_SUPPLY = 4960;
+    uint256 public PRE_SALE_MAX_SUPPLY = 499;
 
     uint256 public artistSupply;
 
-    uint256 public ARTIST_MAX_SUPPLY = 40;
+    uint256 public ARTIST_MAX_SUPPLY = 1;
 
-    uint256 public MAX_SUPPLY = SALE_MAX_SUPPLY + ARTIST_MAX_SUPPLY;
+    uint256 public saleSupply;
 
-    //WHITELIST MINT RESTRICTIONS
+    uint256 public SALE_MAX_SUPPLY = 4500;
+
+    uint256 public MAX_SUPPLY = SALE_MAX_SUPPLY + PRE_SALE_MAX_SUPPLY + ARTIST_MAX_SUPPLY;
+
+    //MERKLE ROOT FOR WHITELIST MINTS
 
     bytes32 public merkleRoot;
 
-    mapping(bytes32 => bool) private usedTokens;
-
     //metadatas
-    string public baseURI = "https://server.wagmi-studio.com/metadata/test/infTest/";
+    string public baseURI = "ipfs://Qmb2egjx8rQFzSk9fEpbdsT3ezPCeuF5RbiQKtTzgyzWDf/";
+
+    string public contractURI = "ipfs://QmfTt8QCkRcSZCydXp2ZD5EsdSwQarWyHHLb85BETH6h2G/contract.json";
 
     /*
      * @param - usdByEthFeedAddress : chainlink usd/eth converter address
      * @param – usdByEuroFeedAddress: chainlink usd/euro converter address
      */
     constructor(address usdByEthFeedAddress, address usdByEuroFeedAddress)
-    ERC721("InfTest 1", "INF")
+    ERC721("INFINITY COLLECTION TEST1", "INF PASS")
         {
             usdByEthFeed = AggregatorV3Interface(usdByEthFeedAddress);
             usdByEuroFeed = AggregatorV3Interface(usdByEuroFeedAddress);
         }
 
-    //SALE MINT FUNCTIONS
+    //PRE SALE MINT FUNCTIONS
 
-    function publicMint(address to, uint256 quantity) external payable {
-        require(contractStatus == Status.PublicSale, "Public sale not enabled");
-        require(balanceOf(to)+quantity<=3, "Mint limit reached");
-        saleMint(to, quantity);
+    function preSaleMint(address to, uint256 quantity) external payable {
+        require(contractStatus == Status.Presale, "Pre sale not enabled");
+        require(balanceOf(to)+quantity<=maxMintPerAddress, "Mint limit reached");
+        _checkPreSaleSupply(quantity);
+        _checkPayment(quantity);
+        _preSaleMint(to, quantity);
     }
 
-    function whiteListAddressMint(uint256 quantity, bytes32[] calldata _proof) external payable {
-        require(contractStatus == Status.WhitelistSale, "Whitelist sale not enabled");
-        require(isWhitelistedAddress(msg.sender, _proof), "Invalid merkle proof");
-        require(balanceOf(msg.sender)+quantity<=3, "Mint limit reached");
-        saleMint(msg.sender, quantity);
+    function presaleGiftDrop(address to, uint256 quantity) external onlyOwner {
+        _checkPreSaleSupply(quantity);
+        _preSaleMint(to, quantity);
     }
 
-    function whiteListTokenMint(uint256 quantity, bytes32 token, bytes32[] calldata _proof) external payable {
-        require(contractStatus == Status.WhitelistSale, "Whitelist sale not enabled");
-        require(isWhitelistedToken(token, _proof), "Invalid merkle proof");
-        require(!usedTokens[token], "Token already used");
-        require(balanceOf(msg.sender)+quantity<=3, "Mint limit reached");
-        usedTokens[token] = true;
-        saleMint(msg.sender, quantity);
-    }
-
-    function saleMint(address to, uint256 quantity) private {
+    function _checkPreSaleSupply(uint256 quantity) private view {
         require(quantity>0, "quantity must be positive");
-        require(quantity+saleSupply<=SALE_MAX_SUPPLY, "sale max supply reached");
-        uint256 priceInWei = getNftWeiPrice() * quantity;
-        uint256 minPrice = (priceInWei * 995) / 1000;
-        uint256 maxPrice = (priceInWei * 1005) / 1000;
-        require(msg.value >= minPrice, "Not enough ETH");
-        require(msg.value <= maxPrice, "Too much ETH");
-        uncheckedSaleMint(to, quantity);
+        require(quantity+preSaleSupply<=PRE_SALE_MAX_SUPPLY, "sale max supply reached");
     }
 
-    function uncheckedSaleMint(address to, uint256 quantity) private {
+    function _preSaleMint(address to, uint256 quantity) private {
         unchecked {
-            for(uint256 i = 0;i<quantity;i++){
-                 uint256 index = saleSupply+i;
-                _owners[index] = to;
-                emit Transfer(address(0), to, index);
+            for(uint256 i=1;i<=quantity;i++){
+                 _mint(to, preSaleSupply + i);
             }
-            _balances[to] = _balances[to] + quantity;
-            saleSupply = saleSupply + quantity;
+            preSaleSupply = preSaleSupply + quantity;
         }
     }
 
     //ARTIST DROP FUNCTIONS
 
-    function artistDrop(address artistAddress, uint256 quantity) external onlyOwner {
-        require(quantity>0, "quantity must be positive");
-        require(quantity<=3, "cannot mint more than 3");
-        require(quantity+artistSupply<=ARTIST_MAX_SUPPLY, "artist max supply reached");
-        uncheckedArtistMint(artistAddress, quantity);
+    function artistDrop(address to) external onlyOwner {
+        _checkArtistSupply(1);
+        _artistMint(to);
     }
 
-    function uncheckedArtistMint(address to, uint256 quantity) private {
+    function _checkArtistSupply(uint256 quantity) private view {
+        require(quantity>0, "quantity must be positive");
+        require(quantity+artistSupply<=ARTIST_MAX_SUPPLY, "sale max supply reached");
+    }
+
+    function _artistMint(address to) private {
         unchecked {
-            for(uint256 i = 0;i<quantity;i++){
-                uint256 index = artistSupply+i+SALE_MAX_SUPPLY;
-                _owners[index] = to;
-                emit Transfer(address(0), to, index);
-            }
-            _balances[to] = _balances[to] + quantity;
-            artistSupply = artistSupply + quantity;
+            _mint(to, PRE_SALE_MAX_SUPPLY + (++artistSupply));
         }
+    }
+
+     //WHITELIST AND PUBLIC SALE MINT FUNCTIONS
+
+    function whiteListMint(uint256 quantity, bytes32[] calldata _proof) external payable {
+        require(contractStatus == Status.WhitelistSale, "Whitelist sale not enabled");
+        require(isWhitelistedAddress(msg.sender, _proof), "Invalid merkle proof");
+        require(balanceOf(msg.sender)+quantity<=maxMintPerAddress, "Mint limit reached");
+        _checkSaleSupply(quantity);
+        _checkPayment(quantity);
+        _saleMint(msg.sender, quantity);
+    }
+
+    function publicMint(address to, uint256 quantity) external payable {
+        require(contractStatus == Status.PublicSale, "Public sale not enabled");
+        require(balanceOf(to)+quantity<=maxMintPerAddress, "Mint limit reached");
+        _checkSaleSupply(quantity);
+        _checkPayment(quantity);
+        _saleMint(to, quantity);
+    }
+
+    function saleGiftDrop(address to, uint256 quantity) external onlyOwner {
+        _checkSaleSupply(quantity);
+        _saleMint(to, quantity);
+    }
+
+    function _checkSaleSupply(uint256 quantity) private view {
+        require(quantity>0, "quantity must be positive");
+        require(quantity+saleSupply<=SALE_MAX_SUPPLY, "sale max supply reached");
+    }
+
+    function _saleMint(address to, uint256 quantity) private {
+        unchecked {
+            for(uint256 i = 1;i<=quantity;i++){
+                 _mint(to, PRE_SALE_MAX_SUPPLY + ARTIST_MAX_SUPPLY + saleSupply + i);
+            }
+            saleSupply = saleSupply + quantity;
+        }
+    }
+
+    //PAYMENT CHECKER
+    
+    function _checkPayment(uint256 quantity) private view {
+        uint256 priceInWei = getNftWeiPrice() * quantity;
+        uint256 minPrice = (priceInWei * 995) / 1000;
+        uint256 maxPrice = (priceInWei * 1005) / 1000;
+        require(msg.value >= minPrice, "Not enough ETH");
+        require(msg.value <= maxPrice, "Too much ETH");
     }
 
     //TOTAL SUPPLY REQUIRED FUNCTION
         
     function totalSupply() external view returns(uint256) {
-        return saleSupply+artistSupply;
+        return preSaleSupply+saleSupply+artistSupply;
     }
 
     //ADMIN SETTERS
@@ -144,10 +176,6 @@ using Address for address payable;
 
     function setMerkleRoot(bytes32 root) external onlyOwner {
         merkleRoot = root;
-    }
-
-    function setBaseURI(string memory uri) external onlyOwner {
-        baseURI = uri;
     }
     
     function setPriceInEuro(uint256 price) external onlyOwner {
@@ -192,11 +220,6 @@ using Address for address payable;
     }
 
     //MERKLE TREE FUNCTIONS
-
-    function isWhitelistedToken(bytes32 token, bytes32[] calldata _proof) private view returns(bool) {
-        bytes32 tokenHash = keccak256(abi.encodePacked(token));
-        return MerkleProof.verifyCalldata(_proof, merkleRoot, tokenHash);
-    }
     
     function isWhitelistedAddress(address _address, bytes32[] calldata _proof) private view returns(bool) {
         bytes32 addressHash = keccak256(abi.encodePacked(_address));
