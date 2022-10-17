@@ -1,7 +1,10 @@
 # Infinity NFT
 
-- 5000 total supply (40 airdropped to artists and 4960 for public sale)
-- whitelist sale protected by a merkletree allowing users to mint with their whitelisted address or a unique token
+- 5000 total supply
+- 499 supply for presale
+- 1 supply for artist
+- 4500 supply for whitelist and public
+- whitelist sale protected by a merkletree
 - public sale
-- 3NFTs maximum per wallets when minting in public sale or whitelist sale
+- 10 NFTs maximum per wallets when minting in public sale or whitelist sale
 - Price set in euro
